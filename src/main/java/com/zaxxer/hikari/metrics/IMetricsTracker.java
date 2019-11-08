@@ -17,16 +17,32 @@
 package com.zaxxer.hikari.metrics;
 
 /**
+ * 轨迹测量对象   测量相关的先不看吧 在 metrics下的3个子包 对应3种不同的 测量框架
  * @author Brett Wooldridge
  */
 public interface IMetricsTracker extends AutoCloseable
 {
+   /**
+    * 记录连接创建的时间
+    * @param connectionCreatedMillis
+    */
    default void recordConnectionCreatedMillis(long connectionCreatedMillis) {}
 
+   /**
+    * 记录获取连接的时间 以纳秒为单位
+    * @param elapsedAcquiredNanos
+    */
    default void recordConnectionAcquiredNanos(final long elapsedAcquiredNanos) {}
 
+   /**
+    * 记录使用连接的时间
+    * @param elapsedBorrowedMillis
+    */
    default void recordConnectionUsageMillis(final long elapsedBorrowedMillis) {}
 
+   /**
+    * 记录超时时间
+    */
    default void recordConnectionTimeout() {}
 
    @Override

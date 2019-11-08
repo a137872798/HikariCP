@@ -654,18 +654,23 @@ public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBag
 
    /**
     * Create a PoolStats instance that will be used by metrics tracking, with a pollable resolution of 1 second.
-    *
+    * 这里会返回一个 统计 pool数据的对象
     * @return a PoolStats instance
     */
    private PoolStats getPoolStats()
    {
+      /**
+       * 代表每过一秒 尝试重新读取数据
+       */
       return new PoolStats(SECONDS.toMillis(1)) {
          @Override
          protected void update() {
+            // 通过静态方法获取对应的属性
             this.pendingThreads = HikariPool.this.getThreadsAwaitingConnection();
             this.idleConnections = HikariPool.this.getIdleConnections();
             this.totalConnections = HikariPool.this.getTotalConnections();
             this.activeConnections = HikariPool.this.getActiveConnections();
+            // 从conf 中获取属性
             this.maxConnections = config.getMaximumPoolSize();
             this.minConnections = config.getMinimumIdle();
          }

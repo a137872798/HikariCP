@@ -16,11 +16,14 @@
 
 package com.zaxxer.hikari.metrics;
 
+/**
+ * 测量轨迹工厂对象
+ */
 public interface MetricsTrackerFactory
 {
    /**
     * Create an instance of an IMetricsTracker.
-    *
+    * 通过连接池 name 和 线程池统计对象
     * @param poolName the name of the pool
     * @param poolStats a PoolStats instance to use
     * @return a IMetricsTracker implementation instance

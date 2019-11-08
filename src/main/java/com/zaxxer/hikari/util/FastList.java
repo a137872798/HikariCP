@@ -32,15 +32,24 @@ import java.util.function.UnaryOperator;
 
 /**
  * Fast list without range checking.
- *
+ * 就是一个简易的list 没有做范围检查以及 remove时从后往前查找数据 实现随机访问的接口
  * @author Brett Wooldridge
  */
 public final class FastList<T> implements List<T>, RandomAccess, Serializable
 {
    private static final long serialVersionUID = -4598088075242913858L;
 
+   /**
+    * 存放的是 T 的class
+    */
    private final Class<?> clazz;
+   /**
+    * 实际存放元素的数组
+    */
    private T[] elementData;
+   /**
+    * 内部元素长度
+    */
    private int size;
 
    /**
@@ -50,6 +59,7 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
    @SuppressWarnings("unchecked")
    public FastList(Class<?> clazz)
    {
+      // 初始化数组对象
       this.elementData = (T[]) Array.newInstance(clazz, 32);
       this.clazz = clazz;
    }
@@ -58,6 +68,7 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
     * Construct a FastList with a specified size.
     * @param clazz the Class stored in the collection
     * @param capacity the initial size of the FastList
+    *                 使用指定的初始长度进行初始化
     */
    @SuppressWarnings("unchecked")
    public FastList(Class<?> clazz, int capacity)
@@ -74,10 +85,12 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
    @Override
    public boolean add(T element)
    {
+      // 正常情况下 直接赋值就可以
       if (size < elementData.length) {
          elementData[size++] = element;
       }
       else {
+         // 代表需要扩容  看来该容器不是线程安全的
          // overflow-conscious code
          final int oldCapacity = elementData.length;
          final int newCapacity = oldCapacity << 1;
@@ -107,7 +120,7 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
     * Remove the last element from the list.  No bound check is performed, so if this
     * method is called on an empty list and ArrayIndexOutOfBounds exception will be
     * thrown.
-    *
+    * 移除最后一个元素 因为没有做类型检查所以 可能会抛出 数组下标越界异常
     * @return the last element of the list
     */
    public T removeLast()
@@ -121,7 +134,8 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
     * This remove method is most efficient when the element being removed
     * is the last element.  Equality is identity based, not equals() based.
     * Only the first matching element is removed.
-    *
+    * 删除指定元素 这里使用的是 == 而不是equals() 要注意  而且是从后往前删除 看来该对象在一个特定的场景下使用 所以可以不需要范围检查
+    * 以及 从后往前删除
     * @param element the element to remove
     */
    @Override
@@ -181,7 +195,7 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
       return old;
    }
 
-   /** {@inheritDoc} */
+   /** {@inheritDoc} 指定下标进行删除 也没有做范围检查 可能会越界 */
    @Override
    public T remove(int index)
    {
@@ -228,7 +242,7 @@ public final class FastList<T> implements List<T>, RandomAccess, Serializable
                return elementData[index++];
             }
 
-            throw new NoSuchElementException("No more elements in FastList"); 
+            throw new NoSuchElementException("No more elements in FastList");
          }
       };
    }

@@ -48,22 +48,49 @@ import static com.zaxxer.hikari.util.UtilityElf.createInstance;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+/**
+ * 连接池的基类
+ */
 abstract class PoolBase
 {
    private final Logger logger = LoggerFactory.getLogger(PoolBase.class);
 
+   /**
+    * 内部维护了 hikari的配置对象  需要的配置可以直接从这里获取
+    */
    public final HikariConfig config;
+   /**
+    * 轨迹测量代理对象
+    */
    IMetricsTrackerDelegate metricsTracker;
 
+   /**
+    * 连接池的名称
+    */
    protected final String poolName;
 
+   /**
+    * 目录
+    */
    volatile String catalog;
+   /**
+    * 当连接失败时的异常
+    */
    final AtomicReference<Exception> lastConnectionFailure;
 
+   /**
+    * 连接超时时间
+    */
    long connectionTimeout;
+   /**
+    * 校验超时时间
+    */
    long validationTimeout;
 
    private static final String[] RESET_STATES = {"readOnly", "autoCommit", "isolation", "catalog", "netTimeout", "schema"};
+   /**
+    * 代表当前未初始化
+    */
    private static final int UNINITIALIZED = -1;
    private static final int TRUE = 1;
    private static final int FALSE = 0;
@@ -85,20 +112,29 @@ abstract class PoolBase
 
    private volatile boolean isValidChecked;
 
+   /**
+    * 通过 hikariConf 进行初始化
+    * @param config
+    */
    PoolBase(final HikariConfig config)
    {
       this.config = config;
 
+      // 网络超时时间默认为-1
       this.networkTimeout = UNINITIALIZED;
+      // 获取目录属性
       this.catalog = config.getCatalog();
       this.schema = config.getSchema();
       this.isReadOnly = config.isReadOnly();
       this.isAutoCommit = config.isAutoCommit();
+      // 将设置的 事务隔离级别转换成int  如果传入的格式错误会抛出异常
       this.transactionIsolation = UtilityElf.getTransactionIsolation(config.getTransactionIsolation());
 
       this.isQueryTimeoutSupported = UNINITIALIZED;
       this.isNetworkTimeoutSupported = UNINITIALIZED;
+      // 是否启用连接测试
       this.isUseJdbc4Validation = config.getConnectionTestQuery() == null;
+      // 是否通过内部查询???
       this.isIsolateInternalQueries = config.isIsolateInternalQueries();
 
       this.poolName = config.getPoolName();
@@ -106,6 +142,7 @@ abstract class PoolBase
       this.validationTimeout = config.getValidationTimeout();
       this.lastConnectionFailure = new AtomicReference<>();
 
+      // 利用 dataSourceClassName 或者 jdbcUrl 初始化 dataSource
       initializeDataSource();
    }
 
@@ -300,9 +337,11 @@ abstract class PoolBase
 
    /**
     * Create/initialize the underlying DataSource.
+    * 初始化 dataSource
     */
    private void initializeDataSource()
    {
+      // 从config 中 获取dataSource 需要的属性
       final String jdbcUrl = config.getJdbcUrl();
       final String username = config.getUsername();
       final String password = config.getPassword();
@@ -311,14 +350,19 @@ abstract class PoolBase
       final String dataSourceJNDI = config.getDataSourceJNDI();
       final Properties dataSourceProperties = config.getDataSourceProperties();
 
+      // 官方文档的介绍是 推荐使用 dataSourceClassName 进行初始化 而针对 setDataSource 一般是通过 IOC 框架 比如spring 直接注入数据源的
       DataSource ds = config.getDataSource();
       if (dsClassName != null && ds == null) {
          ds = createInstance(dsClassName, DataSource.class);
+         // 从 配置文件中将 dataSource 相关的属性覆盖到 生成的对象中 如果dataSource 是通过IOC 框架注入进来的 就不需要更改属性了
          PropertyElf.setTargetFromProperties(ds, dataSourceProperties);
       }
+      // 如果存在 jdbcUrl 那么就创建 对应的 dataSource
       else if (jdbcUrl != null && ds == null) {
          ds = new DriverDataSource(jdbcUrl, driverClassName, dataSourceProperties, username, password);
       }
+      // 使用 JNDI 查找dataSource 可以理解为 javaEE 的一种规范 从应用服务器(tomcat) 读取dataSource相关配置
+      // 先忽略这种方式  主要是看 hikari快在哪里
       else if (dataSourceJNDI != null && ds == null) {
          try {
             InitialContext ic = new InitialContext();
@@ -328,8 +372,11 @@ abstract class PoolBase
          }
       }
 
+
       if (ds != null) {
+         // 当 dataSource 成功初始化后 开始设置登录超时时间 (实际上api 的描述是获取连接的超时时间)
          setLoginTimeout(ds);
+         // 创建网络超时执行器
          createNetworkTimeoutExecutor(ds, dsClassName, jdbcUrl);
       }
 
@@ -580,12 +627,20 @@ abstract class PoolBase
       }
    }
 
+   /**
+    * 创建网络超时执行器
+    * @param dataSource   数据源对象
+    * @param dsClassName   数据源类名
+    * @param jdbcUrl
+    */
    private void createNetworkTimeoutExecutor(final DataSource dataSource, final String dsClassName, final String jdbcUrl)
    {
       // Temporary hack for MySQL issue: http://bugs.mysql.com/bug.php?id=75615
+      // 如果是 mysql驱动
       if ((dsClassName != null && dsClassName.contains("Mysql")) ||
           (jdbcUrl != null && jdbcUrl.contains("mysql")) ||
           (dataSource != null && dataSource.getClass().getName().contains("Mysql"))) {
+         // 实际上就是同步执行
          netTimeoutExecutor = new SynchronousExecutor();
       }
       else {
@@ -593,6 +648,7 @@ abstract class PoolBase
          threadFactory = threadFactory != null ? threadFactory : new DefaultThreadFactory(poolName + " network timeout executor", true);
          ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newCachedThreadPool(threadFactory);
          executor.setKeepAliveTime(15, SECONDS);
+         // 允许核心线程超时释放
          executor.allowCoreThreadTimeOut(true);
          netTimeoutExecutor = executor;
       }
@@ -600,7 +656,7 @@ abstract class PoolBase
 
    /**
     * Set the loginTimeout on the specified DataSource.
-    *
+    * 设置获取connection 的超时时间
     * @param dataSource the DataSource
     */
    private void setLoginTimeout(final DataSource dataSource)
@@ -655,6 +711,7 @@ abstract class PoolBase
    /**
     * Special executor used only to work around a MySQL issue that has not been addressed.
     * MySQL issue: http://bugs.mysql.com/bug.php?id=75615
+    * 创建同步执行器 实际上没有使用额外的线程执行任务 而是在主线程中同步执行
     */
    private static class SynchronousExecutor implements Executor
    {
@@ -671,6 +728,9 @@ abstract class PoolBase
       }
    }
 
+   /**
+    * 实现类 内部应该是包含一个 统计轨迹对象
+    */
    interface IMetricsTrackerDelegate extends AutoCloseable
    {
       default void recordConnectionUsage(PoolEntry poolEntry) {}
@@ -691,6 +751,7 @@ abstract class PoolBase
     * A class that delegates to a MetricsTracker implementation.  The use of a delegate
     * allows us to use the NopMetricsTrackerDelegate when metrics are disabled, which in
     * turn allows the JIT to completely optimize away to callsites to record metrics.
+    * 代理对象 内部包含 轨迹统计对象
     */
    static class MetricsTrackerDelegate implements IMetricsTrackerDelegate
    {
@@ -742,6 +803,7 @@ abstract class PoolBase
    /**
     * A no-op implementation of the IMetricsTrackerDelegate that is used when metrics capture is
     * disabled.
+    * 不做任何操作的统计对象
     */
    static final class NopMetricsTrackerDelegate implements IMetricsTrackerDelegate {}
 }

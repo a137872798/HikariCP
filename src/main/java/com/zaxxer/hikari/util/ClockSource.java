@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * A resolution-independent provider of current time-stamps and elapsed time
  * calculations.
- *
+ * 时钟资源
  * @author Brett Wooldridge
  */
 public interface ClockSource
@@ -38,7 +38,7 @@ public interface ClockSource
 
    /**
     * Get the current time-stamp (resolution is opaque).
-    *
+    * 获取当前时间
     * @return the current time-stamp
     */
    static long currentTime() {
@@ -161,9 +161,16 @@ public interface ClockSource
       return CLOCK.elapsedDisplayString0(startTime, endTime);
    }
 
+   /**
+    * 将时间差转换成string 返回  这里不细看了 就是返回一个时间差字符串
+    * @param startTime
+    * @param endTime
+    * @return
+    */
    default String elapsedDisplayString0(long startTime, long endTime) {
       long elapsedNanos = elapsedNanos0(startTime, endTime);
 
+      // 这是 正负符号
       StringBuilder sb = new StringBuilder(elapsedNanos < 0 ? "-" : "");
       elapsedNanos = Math.abs(elapsedNanos);
 
@@ -184,40 +191,46 @@ public interface ClockSource
 
    /**
     * Factory class used to create a platform-specific ClockSource.
+    * 该工厂用于创建平台用的时钟资源  同一管理对 System.currentTimeMillis() 的调用
     */
    class Factory
    {
       private static ClockSource create() {
          String os = System.getProperty("os.name");
          if ("Mac OS X".equals(os)) {
+            // 如果是 Mac 操作系统 创建毫秒级别时钟资源
             return new MillisecondClockSource();
          }
 
+         // 默认创建纳秒级别时钟资源
          return new NanosecondClockSource();
       }
    }
 
+   /**
+    * 时钟资源
+    */
    final class MillisecondClockSource implements ClockSource
    {
-      /** {@inheritDoc} */
+      /** {@inheritDoc} 返回当前时间 */
       @Override
       public long currentTime0() {
          return System.currentTimeMillis();
       }
 
-      /** {@inheritDoc} */
+      /** {@inheritDoc} 返回 当前时间 与 入参的时间差*/
       @Override
       public long elapsedMillis0(final long startTime) {
          return System.currentTimeMillis() - startTime;
       }
 
-      /** {@inheritDoc} */
+      /** {@inheritDoc} 返回2个参数之间的时间差 */
       @Override
       public long elapsedMillis0(final long startTime, final long endTime) {
          return endTime - startTime;
       }
 
-      /** {@inheritDoc} */
+      /** {@inheritDoc} 返回纳秒单位 */
       @Override
       public long elapsedNanos0(final long startTime) {
          return MILLISECONDS.toNanos(System.currentTimeMillis() - startTime);
@@ -247,13 +260,16 @@ public interface ClockSource
          return time + millis;
       }
 
-      /** {@inheritDoc} */
+      /** {@inheritDoc} 获取该资源的时间单位*/
       @Override
       public TimeUnit getSourceTimeUnit0() {
          return MILLISECONDS;
       }
    }
 
+   /**
+    * 纳秒级别的 时钟资源
+    */
    class NanosecondClockSource implements ClockSource
    {
       /** {@inheritDoc} */

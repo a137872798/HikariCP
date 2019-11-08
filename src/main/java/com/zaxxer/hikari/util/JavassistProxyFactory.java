@@ -35,17 +35,22 @@ import javassist.bytecode.ClassFile;
  * {@link PreparedStatement}, and {@link CallableStatement}.  Additionally it injects
  * method bodies into the {@link ProxyFactory} class methods that can instantiate
  * instances of the generated proxies.
- *
+ * 基于 javassist 的动态代理  该对象基于动态代码生成时 可以自由的添加方法  属性  构造函数等
  * @author Brett Wooldridge
  */
 public final class JavassistProxyFactory
 {
+   /**
+    * 类池对象 用于创建动态代码
+    */
    private static ClassPool classPool;
    private static String genDirectory = "";
 
    public static void main(String... args) throws Exception {
       classPool = new ClassPool();
+      // 指定生成代理类的包名
       classPool.importPackage("java.sql");
+      // 指定类加载在器
       classPool.appendClassPath(new LoaderClassPath(JavassistProxyFactory.class.getClassLoader()));
 
       if (args.length > 0) {
@@ -53,7 +58,8 @@ public final class JavassistProxyFactory
       }
 
       // Cast is not needed for these
-      String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";
+      String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";、
+      // 这里将所有 java.sql 相关的对象都变成了代理对象
       generateProxyClass(Connection.class, ProxyConnection.class.getName(), methodBody);
       generateProxyClass(Statement.class, ProxyStatement.class.getName(), methodBody);
       generateProxyClass(ResultSet.class, ProxyResultSet.class.getName(), methodBody);

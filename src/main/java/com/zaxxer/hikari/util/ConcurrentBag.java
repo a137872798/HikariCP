@@ -59,28 +59,54 @@ import com.zaxxer.hikari.util.ConcurrentBag.IConcurrentBagEntry;
  * the "remove" method can completely remove an object from the bag.
  *
  * @author Brett Wooldridge
- *
+ * 实现了工作窃取的并发容器
  * @param <T> the templated type to store in the bag
  */
 public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseable
 {
    private static final Logger LOGGER = LoggerFactory.getLogger(ConcurrentBag.class);
 
+   /**
+    * 内部包含一个 写时复制列表
+    */
    private final CopyOnWriteArrayList<T> sharedList;
    private final boolean weakThreadLocals;
 
+   /**
+    * 每条线程维护一个列表
+    */
    private final ThreadLocal<List<Object>> threadList;
+   /**
+    * 该并发包对象可以设置监听器 当往包中添加新的数据时 会触发钩子
+    */
    private final IBagStateListener listener;
+   /**
+    * 当前等待者的数量
+    */
    private final AtomicInteger waiters;
+   /**
+    * 是否被关闭
+    */
    private volatile boolean closed;
 
+   /**
+    * 该队列好像是  当一个线程请求拉取一个数据时 必须等到另一个线程设置数据才能被唤醒 反之如果先填入数据 那么获取数据的线程能够正常运行不被阻塞
+    * 根据公平非公平机制 生成栈或者队列的数据结构
+    */
    private final SynchronousQueue<T> handoffQueue;
 
+   /**
+    * 该并发包内部填充的实体必须实现该接口
+    */
    public interface IConcurrentBagEntry
    {
+      // 代表该数据还没有被使用
       int STATE_NOT_IN_USE = 0;
+      // 正在使用中
       int STATE_IN_USE = 1;
+      // 已经被移除
       int STATE_REMOVED = -1;
+      // 反转???
       int STATE_RESERVED = -2;
 
       boolean compareAndSet(int expectState, int newState);
@@ -88,6 +114,9 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
       int getState();
    }
 
+   /**
+    * 当往 并发包中添加了一个数据 会触发钩子函数
+    */
    public interface IBagStateListener
    {
       void addBagItem(int waiting);
@@ -95,15 +124,18 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
 
    /**
     * Construct a ConcurrentBag with the specified listener.
-    *
+    * 通过一个监听器对象开始初始化 而 HikariPool 实现了该接口
     * @param listener the IBagStateListener to attach to this bag
     */
    public ConcurrentBag(final IBagStateListener listener)
    {
       this.listener = listener;
+      // 是否使用 本地线程变量
       this.weakThreadLocals = useWeakThreadLocals();
 
+      // 初始化同步队列
       this.handoffQueue = new SynchronousQueue<>(true);
+      // 一开始等待数量为0
       this.waiters = new AtomicInteger();
       this.sharedList = new CopyOnWriteArrayList<>();
       if (weakThreadLocals) {

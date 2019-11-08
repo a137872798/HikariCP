@@ -16,6 +16,9 @@
 
 package com.zaxxer.hikari.util;
 
+/**
+ * 线程隔离级别枚举
+ */
 public enum IsolationLevel
 {
    TRANSACTION_NONE(0),

@@ -24,11 +24,15 @@ import java.util.concurrent.Semaphore;
  * This class implements a lock that can be used to suspend and resume the pool.  It
  * also provides a faux implementation that is used when the feature is disabled that
  * hopefully gets fully "optimized away" by the JIT.
- *
+ * 该锁用于 悬挂和 恢复线程池  并且提供了一个空实现 在不使用时能够被 JIT 完全的优化
  * @author Brett Wooldridge
  */
 public class SuspendResumeLock
 {
+   /**
+    * faux(仿制的 等同于fake) 实现
+    * 实际上使用基于false 的时候就应该用该静态变量  否则直接调用方法会出现空指针
+    */
    public static final SuspendResumeLock FAUX_LOCK = new SuspendResumeLock(false) {
       @Override
       public void acquire() {}
@@ -43,7 +47,13 @@ public class SuspendResumeLock
       public void resume() {}
    };
 
+   /**
+    * 许可证数量默认为 10000
+    */
    private static final int MAX_PERMITS = 10000;
+   /**
+    * 内部维护了一个信号量
+    */
    private final Semaphore acquisitionSemaphore;
 
    /**
@@ -56,6 +66,7 @@ public class SuspendResumeLock
 
    private SuspendResumeLock(final boolean createSemaphore)
    {
+      // 根据情况 是否要设置 信号量
       acquisitionSemaphore = (createSemaphore ? new Semaphore(MAX_PERMITS, true) : null);
    }
 
@@ -64,10 +75,12 @@ public class SuspendResumeLock
       if (acquisitionSemaphore.tryAcquire()) {
          return;
       }
+      // 当没有门票时是否抛出异常
       else if (Boolean.getBoolean("com.zaxxer.hikari.throwIfSuspended")) {
          throw new SQLTransientException("The pool is currently suspended and configured to throw exceptions upon acquisition");
       }
 
+      // 阻塞获取锁
       acquisitionSemaphore.acquireUninterruptibly();
    }
 
@@ -76,6 +89,9 @@ public class SuspendResumeLock
       acquisitionSemaphore.release();
    }
 
+   /**
+    * 悬挂就是一次性使用完所有门票 而对应的 恢复就是 释放所有门票
+    */
    public void suspend()
    {
       acquisitionSemaphore.acquireUninterruptibly(MAX_PERMITS);

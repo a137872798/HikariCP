@@ -43,20 +43,21 @@ import com.zaxxer.hikari.pool.HikariPool;
  * <p>
  * The Connection99Percent health check will only be registered if the health check property
  * <code>expected99thPercentileMs</code> is defined and greater than 0.
- *
+ * jraft 也是使用了 codahale 进行数据统计   健康检查对象
  * @author Brett Wooldridge
  */
 public final class CodahaleHealthChecker
 {
    /**
     * Register Dropwizard health checks.
-    *
-    * @param pool the pool to register health checks for
-    * @param hikariConfig the pool configuration
-    * @param registry the HealthCheckRegistry into which checks will be registered
+    * 注册一个健康检查对象
+    * @param pool the pool to register health checks for   传入 hikari线程池
+    * @param hikariConfig the pool configuration    hikari配置对象
+    * @param registry the HealthCheckRegistry into which checks will be registered    健康检查工厂
     */
    public static void registerHealthChecks(final HikariPool pool, final HikariConfig hikariConfig, final HealthCheckRegistry registry)
    {
+      // 获取需要检查的 属性 由用户自定义  在框架中没有设置
       final Properties healthCheckProperties = hikariConfig.getHealthCheckProperties();
       final MetricRegistry metricRegistry = (MetricRegistry) hikariConfig.getMetricRegistry();
 

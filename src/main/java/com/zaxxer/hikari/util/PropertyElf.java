@@ -44,6 +44,11 @@ public final class PropertyElf
       // cannot be constructed
    }
 
+   /**
+    * 从prop 中找到属性并设置到obj 中
+    * @param target
+    * @param properties
+    */
    public static void setTargetFromProperties(final Object target, final Properties properties)
    {
       if (target == null || properties == null) {
