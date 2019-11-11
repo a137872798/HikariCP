@@ -137,7 +137,6 @@ abstract class PoolBase
       this.isNetworkTimeoutSupported = UNINITIALIZED;
       // 是否启用连接测试
       this.isUseJdbc4Validation = config.getConnectionTestQuery() == null;
-      // 是否通过内部查询???
       this.isIsolateInternalQueries = config.isIsolateInternalQueries();
 
       this.poolName = config.getPoolName();
@@ -310,6 +309,9 @@ abstract class PoolBase
       }
    }
 
+   /**
+    * 终止网络超时执行器
+    */
    void shutdownNetworkTimeoutExecutor()
    {
       if (netTimeoutExecutor instanceof ThreadPoolExecutor) {
@@ -317,6 +319,10 @@ abstract class PoolBase
       }
    }
 
+   /**
+    * 获取登录超时时间 默认5秒
+    * @return
+    */
    long getLoginTimeout()
    {
       try {
@@ -332,7 +338,7 @@ abstract class PoolBase
 
    /**
     * Register MBeans for HikariConfig and HikariPool.
-    *
+    * 该方法是关于 mBean 的 就是一个可以通过 java kit 直接操作类 不影响 连接池的核心功能 先忽略
     * @param hikariPool a HikariPool instance
     */
    void handleMBeans(final HikariPool hikariPool, final boolean register)
@@ -441,6 +447,7 @@ abstract class PoolBase
       }
       catch (Exception e) {
          if (connection != null) {
+            // 如果出现异常则关闭连接
             quietlyCloseConnection(connection, "(Failed to create/setup connection)");
          }
          else if (getLastConnectionFailure() == null) {
@@ -469,13 +476,15 @@ abstract class PoolBase
       try {
          // 如果没有设置网络超时时间
          if (networkTimeout == UNINITIALIZED) {
-            // 根据校验时间来初始化
+            // 设置校验时间 并返回 默认的网络超时时间
             networkTimeout = getAndSetNetworkTimeout(connection, validationTimeout);
          }
          else {
+            // 不需要记录网络超时时间
             setNetworkTimeout(connection, validationTimeout);
          }
 
+         // 开始设置各种初始化参数
          if (connection.isReadOnly() != isReadOnly) {
             connection.setReadOnly(isReadOnly);
          }
@@ -498,8 +507,10 @@ abstract class PoolBase
             connection.setSchema(schema);
          }
 
+         // 看来执行sql 才能让 这些配置生效
          executeSql(connection, config.getConnectionInitSql(), true);
 
+         // 还原网络超时时间
          setNetworkTimeout(connection, networkTimeout);
       }
       catch (SQLException e) {
@@ -509,11 +520,12 @@ abstract class PoolBase
 
    /**
     * Execute isValid() or connection test query.
-    *
+    * 检查驱动是否支持某些属性
     * @param connection a Connection to check
     */
    private void checkDriverSupport(final Connection connection) throws SQLException
    {
+      // 如果 还没有检查过
       if (!isValidChecked) {
          checkValidationSupport(connection);
          checkDefaultIsolation(connection);
@@ -531,10 +543,12 @@ abstract class PoolBase
    private void checkValidationSupport(final Connection connection) throws SQLException
    {
       try {
+         // 如果支持 jdbc检查 直接调用 isValid
          if (isUseJdbc4Validation) {
             connection.isValid(1);
          }
          else {
+            // 否则执行 测试用sql
             executeSql(connection, config.getConnectionTestQuery(), false);
          }
       }
@@ -546,7 +560,7 @@ abstract class PoolBase
 
    /**
     * Check the default transaction isolation of the Connection.
-    *
+    * 检查默认隔离级别
     * @param connection a Connection to check
     * @throws SQLException rethrown from the driver
     */
@@ -568,12 +582,13 @@ abstract class PoolBase
 
    /**
     * Set the query timeout, if it is supported by the driver.
-    *
+    * 设置查询超时时间
     * @param statement a statement to set the query timeout on
     * @param timeoutSec the number of seconds before timeout
     */
    private void setQueryTimeout(final Statement statement, final int timeoutSec)
    {
+      // 支持或者未设置
       if (isQueryTimeoutSupported != FALSE) {
          try {
             statement.setQueryTimeout(timeoutSec);
@@ -643,7 +658,7 @@ abstract class PoolBase
 
    /**
     * Execute the user-specified init SQL.
-    *
+    * 执行sql 语句
     * @param connection the connection to initialize
     * @param sql the SQL to execute
     * @param isCommit whether to commit the SQL after execution or not
@@ -657,6 +672,7 @@ abstract class PoolBase
             statement.execute(sql);
          }
 
+         // 根据本次是否要提交
          if (isIsolateInternalQueries && !isAutoCommit) {
             if (isCommit) {
                connection.commit();

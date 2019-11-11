@@ -109,6 +109,7 @@ public final class JavassistProxyFactory
 
    /**
     *  Generate Javassist Proxy Classes
+    *  创建代理对象
     */
    private static <T> void generateProxyClass(Class<T> primaryInterface, String superClassName, String methodBody) throws Exception
    {
