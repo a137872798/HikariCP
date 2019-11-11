@@ -30,28 +30,58 @@ import static com.zaxxer.hikari.util.ClockSource.*;
 
 /**
  * Entry used in the ConcurrentBag to track Connection instances.
- *
+ * 该对象实现了 ConcurrentBag 类中每个实体接口
  * @author Brett Wooldridge
  */
 final class PoolEntry implements IConcurrentBagEntry
 {
    private static final Logger LOGGER = LoggerFactory.getLogger(PoolEntry.class);
+   /**
+    * 使用原子引用更新状态 (原子更新对象通常可以声明成常量 因为它是无状态的)
+    */
    private static final AtomicIntegerFieldUpdater<PoolEntry> stateUpdater;
 
+   /**
+    * 每个entry 对象对应一个 连接
+    */
    Connection connection;
+   /**
+    * 最后被访问的时间戳
+    */
    long lastAccessed;
+   /**
+    * 最后被借用的时间戳
+    */
    long lastBorrowed;
 
    @SuppressWarnings("FieldCanBeLocal")
    private volatile int state = 0;
+   /**
+    * 是否被驱逐
+    */
    private volatile boolean evict;
 
+   /**
+    * 在定时器中被包裹的任务对象
+    */
    private volatile ScheduledFuture<?> endOfLife;
 
+   /**
+    * 存储会话的对象 因为该列表被访问的特殊性 所以能够构建不需要范围检查的list 用于提升性能
+    */
    private final FastList<Statement> openStatements;
+   /**
+    * 该entry 关联的pool
+    */
    private final HikariPool hikariPool;
 
+   /**
+    * 是否只读
+    */
    private final boolean isReadOnly;
+   /**
+    * 是否自动提交
+    */
    private final boolean isAutoCommit;
 
    static
@@ -71,13 +101,15 @@ final class PoolEntry implements IConcurrentBagEntry
 
    /**
     * Release this entry back to the pool.
-    *
+    * 归还连接(本对象) 到连接池中
     * @param lastAccessed last access time-stamp
     */
    void recycle(final long lastAccessed)
    {
       if (connection != null) {
+         // 更新最后访问时间
          this.lastAccessed = lastAccessed;
+         // 归还元素
          hikariPool.recycle(this);
       }
    }
@@ -92,11 +124,23 @@ final class PoolEntry implements IConcurrentBagEntry
       this.endOfLife = endOfLife;
    }
 
+   /**
+    * 将内部的conn 对象包装成动态代理对象
+    * @param leakTask 泄露检测任务
+    * @param now
+    * @return
+    */
    Connection createProxyConnection(final ProxyLeakTask leakTask, final long now)
    {
       return ProxyFactory.getProxyConnection(this, connection, openStatements, leakTask, now, isReadOnly, isAutoCommit);
    }
 
+   /**
+    * 重置状态
+    * @param proxyConnection
+    * @param dirtyBits
+    * @throws SQLException
+    */
    void resetConnectionState(final ProxyConnection proxyConnection, final int dirtyBits) throws SQLException
    {
       hikariPool.resetConnectionState(connection, proxyConnection, dirtyBits);
@@ -107,6 +151,10 @@ final class PoolEntry implements IConcurrentBagEntry
       return hikariPool.toString();
    }
 
+   /**
+    * 是否已经被驱逐
+    * @return
+    */
    boolean isMarkedEvicted()
    {
       return evict;
@@ -117,6 +165,10 @@ final class PoolEntry implements IConcurrentBagEntry
       this.evict = true;
    }
 
+   /**
+    * evict 就是关闭连接
+    * @param closureReason
+    */
    void evict(final String closureReason)
    {
       hikariPool.closeConnection(this, closureReason);
@@ -163,9 +215,14 @@ final class PoolEntry implements IConcurrentBagEntry
       stateUpdater.set(this, update);
    }
 
+   /**
+    * 关闭连接
+    * @return
+    */
    Connection close()
    {
       ScheduledFuture<?> eol = endOfLife;
+      // 如果定时任务关闭失败 只是打印日志 不能影响流程
       if (eol != null && !eol.isDone() && !eol.cancel(false)) {
          LOGGER.warn("{} - maxLifeTime expiration task cancellation unexpectedly returned false for connection {}", getPoolName(), connection);
       }

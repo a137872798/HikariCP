@@ -34,7 +34,7 @@ import com.zaxxer.hikari.util.PropertyElf;
 
 /**
  * A JNDI factory that produces HikariDataSource instances.
- *
+ * 这个类可以不用看  通过name 去查询 服务器容器中dataSource相关的配置 并且读取后生成对应的 dataSource 对象 (jdni已经过时了，很少使用)
  * @author Brett Wooldridge
  */
 public class HikariJNDIFactory implements ObjectFactory

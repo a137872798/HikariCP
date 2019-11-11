@@ -18,7 +18,8 @@ package com.zaxxer.hikari;
 
 /**
  * The javax.management MBean for a Hikari pool configuration.
- *
+ * MXBean 结尾是对  MBean 结尾的一种增强  默认情况下MBean jconsole 只能访问到基本类型 无法访问自定义类型 而实现MXBean 的类能够通过控制台访问自定义类型
+ * 而且 自定义类型字段需要配合 java.beans.ConstructorProperties 注解声明构造方式
  * @author Brett Wooldridge
  */
 public interface HikariConfigMXBean

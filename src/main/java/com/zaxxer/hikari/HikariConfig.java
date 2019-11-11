@@ -45,18 +45,39 @@ import static com.zaxxer.hikari.util.UtilityElf.safeIsAssignableFrom;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+/**
+ * 该对象实现了 MXBean 接口 能够被jconsole管理
+ */
 @SuppressWarnings({"SameParameterValue", "unused"})
 public class HikariConfig implements HikariConfigMXBean
 {
    private static final Logger LOGGER = LoggerFactory.getLogger(HikariConfig.class);
 
+   /**
+    * id 会从这个数组中随机挑选并生成???
+    */
    private static final char[] ID_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
+   /**
+    * 连接超时时间  默认30秒???
+    */
    private static final long CONNECTION_TIMEOUT = SECONDS.toMillis(30);
+   /**
+    * 校验超时时间 5秒
+    */
    private static final long VALIDATION_TIMEOUT = SECONDS.toMillis(5);
+   /**
+    * 空闲时间 10秒 也就是某条未使用的超过 maxCore 的连接会被回收
+    */
    private static final long IDLE_TIMEOUT = MINUTES.toMillis(10);
    private static final long MAX_LIFETIME = MINUTES.toMillis(30);
+   /**
+    * 默认的核心连接数
+    */
    private static final int DEFAULT_POOL_SIZE = 10;
 
+   /**
+    * 是否启动单元测试
+    */
    private static boolean unitTest = false;
 
    // Properties changeable at runtime through the HikariConfigMXBean
@@ -98,10 +119,14 @@ public class HikariConfig implements HikariConfigMXBean
    private Object healthCheckRegistry;
    private Properties healthCheckProperties;
 
+   /**
+    * 该属性代表能否动态修改属性 如果为false 那么可以通过 jconsole 等 MXBean 管理工具动态修改属性
+    */
    private volatile boolean sealed;
 
    /**
     * Default constructor
+    * 默认构造函数 通过在jvm中指定配置文件位置来读取对应配置 如果没有设置会先尝试获取默认值
     */
    public HikariConfig()
    {
@@ -118,6 +143,7 @@ public class HikariConfig implements HikariConfigMXBean
       isAutoCommit = true;
 
       String systemProp = System.getProperty("hikaricp.configurationFile");
+      // 加载文件中的 属性并生成 prop 对象然后设置到本对象中 如果携带了 dataSource 相关的属性 那么会添加到 dataSourceProperties 中
       if (systemProp != null) {
          loadProperties(systemProp);
       }
@@ -125,7 +151,7 @@ public class HikariConfig implements HikariConfigMXBean
 
    /**
     * Construct a HikariConfig from the specified properties object.
-    *
+    * 通过传入一个 prop 进行初始化  (实际上还是会走原来那套 不过相同配置会被覆盖 类似 dubbo初始化config的属性覆盖)
     * @param properties the name of the property file
     */
    public HikariConfig(Properties properties)
@@ -148,9 +174,9 @@ public class HikariConfig implements HikariConfigMXBean
       loadProperties(propertyFileName);
    }
 
-   // ***********************************************************************
-   //                       HikariConfigMXBean methods
-   // ***********************************************************************
+   // **********************************************************************************************
+   //                       HikariConfigMXBean methods   代表可以被 jconsole访问到的方法
+   // **********************************************************************************************
 
    /** {@inheritDoc} */
    @Override
@@ -481,6 +507,7 @@ public class HikariConfig implements HikariConfigMXBean
          LOGGER.error("Failed to load driver class {} from HikariConfig class classloader {}", driverClassName, this.getClass().getClassLoader());
       }
 
+      // 代表没有找到对应的jdbc驱动
       if (driverClass == null) {
          throw new RuntimeException("Failed to load driver class " + driverClassName + " in either of HikariConfig class loader or Thread context classloader");
       }
@@ -861,6 +888,9 @@ public class HikariConfig implements HikariConfigMXBean
       this.threadFactory = threadFactory;
    }
 
+   /**
+    * 将该对象密封 这样就无法动态修改属性了
+    */
    void seal()
    {
       this.sealed = true;
@@ -868,7 +898,7 @@ public class HikariConfig implements HikariConfigMXBean
 
    /**
     * Copies the state of {@code this} into {@code other}.
-    *
+    * 从另一个config 对象上复制属性 默认情况下允许动态修改
     * @param other Other {@link HikariConfig} to copy the state to.
     */
    public void copyStateTo(HikariConfig other)
@@ -892,6 +922,11 @@ public class HikariConfig implements HikariConfigMXBean
    //                          Private methods
    // ***********************************************************************
 
+   /**
+    * 通过类加载器加载 class
+    * @param driverClassName
+    * @return
+    */
    private Class<?> attemptFromContextLoader(final String driverClassName) {
       final ClassLoader threadContextClassLoader = Thread.currentThread().getContextClassLoader();
       if (threadContextClassLoader != null) {
@@ -1057,6 +1092,10 @@ public class HikariConfig implements HikariConfigMXBean
       }
    }
 
+   /**
+    * 从指定文件加载数据并转换成 Prop 对象
+    * @param propertyFileName
+    */
    private void loadProperties(String propertyFileName)
    {
       final File propFile = new File(propertyFileName);
@@ -1064,6 +1103,7 @@ public class HikariConfig implements HikariConfigMXBean
          if (is != null) {
             Properties props = new Properties();
             props.load(is);
+            // 代表从prop中将属性设置到本config上
             PropertyElf.setTargetFromProperties(this, props);
          }
          else {

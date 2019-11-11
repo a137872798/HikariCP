@@ -365,6 +365,7 @@ abstract class PoolBase
       // 先忽略这种方式  主要是看 hikari快在哪里
       else if (dataSourceJNDI != null && ds == null) {
          try {
+            // 该对象具备 直接从 j2EE 应用服务器读取指定配置并生成 dataSource的能力
             InitialContext ic = new InitialContext();
             ds = (DataSource) ic.lookup(dataSourceJNDI);
          } catch (NamingException e) {

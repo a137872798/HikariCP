@@ -58,7 +58,7 @@ public final class JavassistProxyFactory
       }
 
       // Cast is not needed for these
-      String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";、
+      String methodBody = "{ try { return delegate.method($$); } catch (SQLException e) { throw checkException(e); } }";
       // 这里将所有 java.sql 相关的对象都变成了代理对象
       generateProxyClass(Connection.class, ProxyConnection.class.getName(), methodBody);
       generateProxyClass(Statement.class, ProxyStatement.class.getName(), methodBody);

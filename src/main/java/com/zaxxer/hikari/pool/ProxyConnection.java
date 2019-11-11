@@ -31,11 +31,12 @@ import static com.zaxxer.hikari.util.ClockSource.currentTime;
 
 /**
  * This is the proxy class for java.sql.Connection.
- *
+ * 连接代理对象
  * @author Brett Wooldridge
  */
 public abstract class ProxyConnection implements Connection
 {
+   // 一些状态位标识
    static final int DIRTY_BIT_READONLY   = 0b000001;
    static final int DIRTY_BIT_AUTOCOMMIT = 0b000010;
    static final int DIRTY_BIT_ISOLATION  = 0b000100;
@@ -44,18 +45,41 @@ public abstract class ProxyConnection implements Connection
    static final int DIRTY_BIT_SCHEMA     = 0b100000;
 
    private static final Logger LOGGER;
+   // 记录错误状态的 Set
    private static final Set<String> ERROR_STATES;
    private static final Set<Integer> ERROR_CODES;
 
+   /**
+    * 委托的实际对象
+    */
    @SuppressWarnings("WeakerAccess")
    protected Connection delegate;
 
+   /**
+    * 一个 连接绑定到一个entry上  他们相互依赖
+    */
    private final PoolEntry poolEntry;
+   /**
+    * 泄露检测对象
+    */
    private final ProxyLeakTask leakTask;
+   /**
+    * 打开的 会话对象列表
+    */
    private final FastList<Statement> openStatements;
 
+   /**
+    * 状态位标识
+    */
    private int dirtyBits;
+   /**
+    * 最后访问时间
+    */
    private long lastAccess;
+   /**
+    * 每当 statement 执行了某条语句后 该标识就会变成true 代表有需要提交的数据
+    * 查询语句 也会修改该标识
+    */
    private boolean isCommitStateDirty;
 
    private boolean isReadOnly;

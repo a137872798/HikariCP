@@ -45,7 +45,7 @@ public final class PropertyElf
    }
 
    /**
-    * 从prop 中找到属性并设置到obj 中
+    * 从prop中抽取属性并设置到 obj 上
     * @param target
     * @param properties
     */
@@ -57,10 +57,12 @@ public final class PropertyElf
 
       List<Method> methods = Arrays.asList(target.getClass().getMethods());
       properties.forEach((key, value) -> {
+         // 如果属性 一 dataSource 开头 去除前缀后 设置到 config 中的 dataSourceProp(也是一个prop对象) 属性中
          if (target instanceof HikariConfig && key.toString().startsWith("dataSource.")) {
             ((HikariConfig) target).addDataSourceProperty(key.toString().substring("dataSource.".length()), value);
          }
          else {
+            // 通过反射将属性 设置到对象对应的字段上
             setProperty(target, key.toString(), value, methods);
          }
       });
@@ -122,19 +124,30 @@ public final class PropertyElf
       return copy;
    }
 
+   /**
+    * 根据属性名 将数值通过反射设置到 目标对象上
+    * @param target
+    * @param propName
+    * @param propValue
+    * @param methods
+    */
    private static void setProperty(final Object target, final String propName, final Object propValue, final List<Method> methods)
    {
       final Logger logger = LoggerFactory.getLogger(PropertyElf.class);
 
       // use the english locale to avoid the infamous turkish locale bug
+      // 生成对应的 set方法名
       String methodName = "set" + propName.substring(0, 1).toUpperCase(Locale.ENGLISH) + propName.substring(1);
+      // 找到对应的方法 这里属性很多的话 要遍历list 好多次
       Method writeMethod = methods.stream().filter(m -> m.getName().equals(methodName) && m.getParameterCount() == 1).findFirst().orElse(null);
 
       if (writeMethod == null) {
+         // 尝试将整个属性名大写后 拼接set 也就是刚方法可能没有遵循驼峰
          String methodName2 = "set" + propName.toUpperCase(Locale.ENGLISH);
          writeMethod = methods.stream().filter(m -> m.getName().equals(methodName2) && m.getParameterCount() == 1).findFirst().orElse(null);
       }
 
+      // 不允许设置不存在的属性
       if (writeMethod == null) {
          logger.error("Property {} does not exist on target {}", propName, target.getClass());
          throw new RuntimeException(String.format("Property %s does not exist on target %s", propName, target.getClass()));
