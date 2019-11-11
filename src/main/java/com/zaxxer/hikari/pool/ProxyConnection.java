@@ -84,6 +84,9 @@ public abstract class ProxyConnection implements Connection
 
    private boolean isReadOnly;
    private boolean isAutoCommit;
+   /**
+    * 网络超时时间
+    */
    private int networkTimeout;
    private int transactionIsolation;
    private String dbcatalog;
@@ -93,6 +96,7 @@ public abstract class ProxyConnection implements Connection
    static {
       LOGGER = LoggerFactory.getLogger(ProxyConnection.class);
 
+      // jdbc 返回的异常状态
       ERROR_STATES = new HashSet<>();
       ERROR_STATES.add("0A000"); // FEATURE UNSUPPORTED
       ERROR_STATES.add("57P01"); // ADMIN SHUTDOWN
@@ -107,6 +111,16 @@ public abstract class ProxyConnection implements Connection
       ERROR_CODES.add(2399);
    }
 
+   /**
+    * 初始化代理连接
+    * @param poolEntry
+    * @param connection
+    * @param openStatements
+    * @param leakTask
+    * @param now
+    * @param isReadOnly
+    * @param isAutoCommit
+    */
    protected ProxyConnection(final PoolEntry poolEntry, final Connection connection, final FastList<Statement> openStatements, final ProxyLeakTask leakTask, final long now, final boolean isReadOnly, final boolean isAutoCommit) {
       this.poolEntry = poolEntry;
       this.delegate = connection;
@@ -167,10 +181,17 @@ public abstract class ProxyConnection implements Connection
       return poolEntry;
    }
 
+   /**
+    * 校验异常信息
+    * @param sqle
+    * @return
+    */
    final SQLException checkException(SQLException sqle)
    {
       SQLException nse = sqle;
+      // 只处理当前conn 对象不是 被关闭对象的情况
       for (int depth = 0; delegate != ClosedConnection.CLOSED_CONNECTION && nse != null && depth < 10; depth++) {
+         // 获取 sql异常对应的 状态
          final String sqlState = nse.getSQLState();
          if (sqlState != null && sqlState.startsWith("08")
              || nse instanceof SQLTimeoutException
@@ -180,11 +201,15 @@ public abstract class ProxyConnection implements Connection
             // broken connection
             LOGGER.warn("{} - Connection {} marked as broken because of SQLSTATE({}), ErrorCode({})",
                         poolEntry.getPoolName(), delegate, sqlState, nse.getErrorCode(), nse);
+            // 将泄露任务关闭
             leakTask.cancel();
+            // 通过 poolEntry 来关闭连接
             poolEntry.evict("(connection is broken)");
+            // 将当前对象更改成 被关闭的连接对象
             delegate = ClosedConnection.CLOSED_CONNECTION;
          }
          else {
+            // 否则尝试获取下一个异常 如果不存在异常了会返回null
             nse = nse.getNextException();
          }
       }
@@ -192,11 +217,18 @@ public abstract class ProxyConnection implements Connection
       return sqle;
    }
 
+   /**
+    * 将某个会话从 轨迹容器中移除
+    * @param statement
+    */
    final synchronized void untrackStatement(final Statement statement)
    {
       openStatements.remove(statement);
    }
 
+   /**
+    * 如果是自动提交不需要做处理 否则设置 待提交标识为 true
+    */
    final void markCommitStateDirty()
    {
       if (isAutoCommit) {
@@ -207,11 +239,20 @@ public abstract class ProxyConnection implements Connection
       }
    }
 
+   /**
+    * 关闭泄露任务
+    */
    void cancelLeakTask()
    {
       leakTask.cancel();
    }
 
+   /**
+    * 将某个会话添加到 轨迹容器中
+    * @param statement
+    * @param <T>
+    * @return
+    */
    private synchronized <T extends Statement> T trackStatement(final T statement)
    {
       openStatements.add(statement);
@@ -219,12 +260,16 @@ public abstract class ProxyConnection implements Connection
       return statement;
    }
 
+   /**
+    * 关闭会话
+    */
    @SuppressWarnings("EmptyTryBlock")
    private synchronized void closeStatements()
    {
       final int size = openStatements.size();
       if (size > 0) {
          for (int i = 0; i < size && delegate != ClosedConnection.CLOSED_CONNECTION; i++) {
+            // 被动触发 close 方法
             try (Statement ignored = openStatements.get(i)) {
                // automatic resource cleanup
             }
@@ -250,27 +295,32 @@ public abstract class ProxyConnection implements Connection
    public final void close() throws SQLException
    {
       // Closing statements can cause connection eviction, so this must run before the conditional below
+      // 关闭 openStatement 中所有会话
       closeStatements();
 
       if (delegate != ClosedConnection.CLOSED_CONNECTION) {
          leakTask.cancel();
 
          try {
+            // 未开启自动提交时 关闭要对事务进行回滚
             if (isCommitStateDirty && !isAutoCommit) {
                delegate.rollback();
                lastAccess = currentTime();
                LOGGER.debug("{} - Executed rollback on connection {} due to dirty commit state on close().", poolEntry.getPoolName(), delegate);
             }
 
+            // 将状态重置
             if (dirtyBits != 0) {
                poolEntry.resetConnectionState(this, dirtyBits);
                lastAccess = currentTime();
             }
 
+            // jdbc相关的清理 可以不了解
             delegate.clearWarnings();
          }
          catch (SQLException e) {
             // when connections are aborted, exceptions are often thrown that should not reach the application
+            // 当出现异常时 如果 该实体还没有被驱逐 触发 checkException  该方法内部会调用 evict
             if (!poolEntry.isMarkedEvicted()) {
                throw checkException(e);
             }
@@ -289,6 +339,8 @@ public abstract class ProxyConnection implements Connection
    {
       return (delegate == ClosedConnection.CLOSED_CONNECTION);
    }
+
+   // 返回的都是代理对象
 
    /** {@inheritDoc} */
    @Override
@@ -383,7 +435,10 @@ public abstract class ProxyConnection implements Connection
       return ProxyFactory.getProxyDatabaseMetaData(this, delegate.getMetaData());
    }
 
-   /** {@inheritDoc} */
+   /**
+    * 提交事务后 将当前 dirty 标记去除
+    * {@inheritDoc}
+    */
    @Override
    public void commit() throws SQLException
    {
@@ -410,7 +465,7 @@ public abstract class ProxyConnection implements Connection
       lastAccess = currentTime();
    }
 
-   /** {@inheritDoc} */
+   /** {@inheritDoc} 修改标识的同时会设置 bits */
    @Override
    public void setAutoCommit(boolean autoCommit) throws SQLException
    {
@@ -465,7 +520,7 @@ public abstract class ProxyConnection implements Connection
       dirtyBits |= DIRTY_BIT_SCHEMA;
    }
 
-   /** {@inheritDoc} */
+   /** {@inheritDoc} wrapperFor是 jdbc 内置的方法 先忽略 判断该对象是否是 指定参数的包装器 */
    @Override
    public final boolean isWrapperFor(Class<?> iface) throws SQLException
    {
@@ -491,12 +546,19 @@ public abstract class ProxyConnection implements Connection
    //                         Private classes
    // **********************************************************************
 
+   /**
+    * 被关闭的连接对象
+    */
    private static final class ClosedConnection
    {
+      // 获取 Closed_connection 只会触发一次 getClosedConnection()
       static final Connection CLOSED_CONNECTION = getClosedConnection();
 
       private static Connection getClosedConnection()
       {
+         // 重写close 相关的方法 首先 isClosed 返回 true 其次 close 不做任何操作  该对象内部没有维护 connection 也就是其他方法被屏蔽了
+         // (尝试调用其他方法直接返回 SQLException("Connection is closed"))
+         // 而一般使用动态代理的套路都是内部维护一个真实的对象引用 然后一般的方法都通过委托 交给内部对象 某些需要特殊处理的方法才加额外逻辑
          InvocationHandler handler = (proxy, method, args) -> {
             final String methodName = method.getName();
             if ("isClosed".equals(methodName)) {

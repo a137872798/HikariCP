@@ -66,6 +66,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  * This is the primary connection pool class that provides the basic
  * pooling behavior for HikariCP.
  *
+ * 核心类
  * @author Brett Wooldridge
  */
 public final class HikariPool extends PoolBase implements HikariPoolMXBean, IBagStateListener

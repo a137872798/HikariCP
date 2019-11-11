@@ -22,7 +22,7 @@ import java.sql.SQLException;
 
 /**
  * This is the proxy class for java.sql.PreparedStatement.
- *
+ * 携带参数占位符的会话对象 该对象在初始化时 就会绑定sql
  * @author Brett Wooldridge
  */
 public abstract class ProxyPreparedStatement extends ProxyStatement implements PreparedStatement

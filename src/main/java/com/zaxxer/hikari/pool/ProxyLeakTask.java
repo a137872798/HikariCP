@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
  * A Runnable that is scheduled in the future to report leaks.  The ScheduledFuture is
  * cancelled if the connection is closed before the leak time expires.
  *
+ * 定时报告泄露的任务
  * @author Brett Wooldridge
  */
 class ProxyLeakTask implements Runnable
@@ -42,6 +43,9 @@ class ProxyLeakTask implements Runnable
 
    static
    {
+      /**
+       * 生成一个空的对象
+       */
       NO_LEAK = new ProxyLeakTask() {
          @Override
          void schedule(ScheduledExecutorService executorService, long leakDetectionThreshold) {}
@@ -54,6 +58,10 @@ class ProxyLeakTask implements Runnable
       };
    }
 
+   /**
+    * 通过一个poolEntry 来初始化 资源泄露对象
+    * @param poolEntry
+    */
    ProxyLeakTask(final PoolEntry poolEntry)
    {
       this.exception = new Exception("Apparent connection leak detected");
@@ -76,8 +84,10 @@ class ProxyLeakTask implements Runnable
    {
       isLeaked = true;
 
+      // 异常在生成的地方 会保存 从最初的入口一直到那个方法的 栈轨迹 如果事先生成异常 之后怎么传递 栈轨迹都是不会发生变化的 那么 这里的意义是???
       final StackTraceElement[] stackTrace = exception.getStackTrace(); 
       final StackTraceElement[] trace = new StackTraceElement[stackTrace.length - 5];
+      // 注意该数组的 顺序是倒序的 最后的方法在最前面 这里去除掉最后面的5个方法
       System.arraycopy(stackTrace, 5, trace, 0, trace.length);
 
       exception.setStackTrace(trace);

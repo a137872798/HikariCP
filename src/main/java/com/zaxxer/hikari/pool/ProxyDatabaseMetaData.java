@@ -5,8 +5,14 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/**
+ * DB 元数据接口
+ */
 public abstract class ProxyDatabaseMetaData implements DatabaseMetaData
 {
+   /**
+    * 内部维护一个 代理连接对象
+    */
    protected final ProxyConnection connection;
 
    @SuppressWarnings("WeakerAccess")
@@ -42,6 +48,8 @@ public abstract class ProxyDatabaseMetaData implements DatabaseMetaData
    {
       return connection;
    }
+
+   // 关键点实际上是 将返回的 resultSet 处理了  先不管 原本这些方法的作用是做什么
 
    @Override
    public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern) throws SQLException {

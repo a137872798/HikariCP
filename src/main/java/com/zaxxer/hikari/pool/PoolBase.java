@@ -107,6 +107,9 @@ abstract class PoolBase
    private final boolean isReadOnly;
    private final boolean isAutoCommit;
 
+   /**
+    * 是否通过 jdbcApi 来测量连接是否有效
+    */
    private final boolean isUseJdbc4Validation;
    private final boolean isIsolateInternalQueries;
 
@@ -159,6 +162,11 @@ abstract class PoolBase
    //                           JDBC methods
    // ***********************************************************************
 
+   /**
+    * 关闭连接对象  打印异常日志
+    * @param connection
+    * @param closureReason
+    */
    void quietlyCloseConnection(final Connection connection, final String closureReason)
    {
       if (connection != null) {
@@ -166,6 +174,7 @@ abstract class PoolBase
             logger.debug("{} - Closing connection {}: {}", poolName, connection, closureReason);
 
             try {
+               // 更新网络超时时间 （支持该属性的前提下）
                setNetworkTimeout(connection, SECONDS.toMillis(15));
             }
             catch (SQLException e) {
@@ -181,19 +190,29 @@ abstract class PoolBase
       }
    }
 
+   /**
+    * 判断当前连接是否存活
+    * @param connection
+    * @return
+    */
    boolean isConnectionAlive(final Connection connection)
    {
       try {
          try {
+            // 这里应该是防止 超时时间比校验时间要短
             setNetworkTimeout(connection, validationTimeout);
 
+            // 以秒为单位
             final int validationSeconds = (int) Math.max(1000L, validationTimeout) / 1000;
 
             if (isUseJdbc4Validation) {
+               // 查看当前连接是否可以 最多阻塞传入的时间
                return connection.isValid(validationSeconds);
             }
 
+            // 执行一条测试语句 用来判断连接是否可用
             try (Statement statement = connection.createStatement()) {
+               // 难道支持网络超时的情况下就不会因为查询超时而抛出失败吗???
                if (isNetworkTimeoutSupported != TRUE) {
                   setQueryTimeout(statement, validationSeconds);
                }
@@ -202,8 +221,10 @@ abstract class PoolBase
             }
          }
          finally {
+            // 还原网络超时时间
             setNetworkTimeout(connection, networkTimeout);
 
+            // 回滚 测试语句造成的影响
             if (isIsolateInternalQueries && !isAutoCommit) {
                connection.rollback();
             }
@@ -233,11 +254,23 @@ abstract class PoolBase
    //                         PoolEntry methods
    // ***********************************************************************
 
+   /**
+    * 通过创建一个新连接来初始化 poolEntry
+    * @return
+    * @throws Exception
+    */
    PoolEntry newPoolEntry() throws Exception
    {
       return new PoolEntry(newConnection(), this, isReadOnly, isAutoCommit);
    }
 
+   /**
+    * 重置连接状态
+    * @param connection
+    * @param proxyConnection
+    * @param dirtyBits
+    * @throws SQLException
+    */
    void resetConnectionState(final Connection connection, final ProxyConnection proxyConnection, final int dirtyBits) throws SQLException
    {
       int resetBits = 0;
@@ -386,7 +419,7 @@ abstract class PoolBase
 
    /**
     * Obtain connection from data source.
-    *
+    * 从dataSource 中获取一条新连接
     * @return a Connection connection
     */
    private Connection newConnection() throws Exception
@@ -400,7 +433,9 @@ abstract class PoolBase
 
          connection = (username == null) ? dataSource.getConnection() : dataSource.getConnection(username, password);
 
+         // 加工连接
          setupConnection(connection);
+         // 因为本次创建连接成功了 就将异常引用置空
          lastConnectionFailure.set(null);
          return connection;
       }
@@ -425,14 +460,16 @@ abstract class PoolBase
 
    /**
     * Setup a connection initial state.
-    *
+    * 设置连接对象初始状态
     * @param connection a Connection
     * @throws ConnectionSetupException thrown if any exception is encountered
     */
    private void setupConnection(final Connection connection) throws ConnectionSetupException
    {
       try {
+         // 如果没有设置网络超时时间
          if (networkTimeout == UNINITIALIZED) {
+            // 根据校验时间来初始化
             networkTimeout = getAndSetNetworkTimeout(connection, validationTimeout);
          }
          else {
@@ -554,16 +591,19 @@ abstract class PoolBase
    /**
     * Set the network timeout, if <code>isUseNetworkTimeout</code> is <code>true</code> and the
     * driver supports it.  Return the pre-existing value of the network timeout.
-    *
+    * 该方法 大体就是设置一个新值 作为网络超时时间  并且返回旧值
     * @param connection the connection to set the network timeout on
     * @param timeoutMs the number of milliseconds before timeout
     * @return the pre-existing network timeout value
     */
    private int getAndSetNetworkTimeout(final Connection connection, final long timeoutMs)
    {
+      // 有可能是 不支持 也有可能是 UNINITIALIZED(未初始化)
       if (isNetworkTimeoutSupported != FALSE) {
          try {
+            // 获取conn 原始的超时时间
             final int originalTimeout = connection.getNetworkTimeout();
+            // 设置成校验超时时间 jdbc原生api 不细看
             connection.setNetworkTimeout(netTimeoutExecutor, (int) timeoutMs);
             isNetworkTimeoutSupported = TRUE;
             return originalTimeout;
