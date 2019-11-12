@@ -30,7 +30,8 @@ import static com.zaxxer.hikari.util.ClockSource.*;
 
 /**
  * Entry used in the ConcurrentBag to track Connection instances.
- * 该对象实现了 ConcurrentBag 类中每个实体接口
+ * 该对象实现了 ConcurrentBag 类中实体接口
+ * 每个被创建的connection 会被该对象包裹 同时 该对象内部有一个 维护statement 的 FastList
  * @author Brett Wooldridge
  */
 final class PoolEntry implements IConcurrentBagEntry
@@ -50,7 +51,7 @@ final class PoolEntry implements IConcurrentBagEntry
     */
    long lastAccessed;
    /**
-    * 最后被借用的时间戳
+    * 最后被借用的时间戳  针对该对象从bag 中被某条线程获取
     */
    long lastBorrowed;
 
@@ -62,7 +63,8 @@ final class PoolEntry implements IConcurrentBagEntry
    private volatile boolean evict;
 
    /**
-    * 在定时器中被包裹的任务对象
+    * 如果该对象设置了最大存活时间 那么在快要到达该时间时 会触发这个定时任务  为什么该对象要持有定时任务引用 因为关闭连接时是直接调用该对象的close 方法 那么
+    * 同时要关闭定时任务 所以要持有引用
     */
    private volatile ScheduledFuture<?> endOfLife;
 
@@ -96,6 +98,7 @@ final class PoolEntry implements IConcurrentBagEntry
       this.isReadOnly = isReadOnly;
       this.isAutoCommit = isAutoCommit;
       this.lastAccessed = currentTime();
+      // 在创建一个 连接对象时(该对象在连接池中就是一个连接对象) 会同时初始化 该连接生成的 statement 容器
       this.openStatements = new FastList<>(Statement.class, 16);
    }
 
@@ -125,9 +128,10 @@ final class PoolEntry implements IConcurrentBagEntry
    }
 
    /**
-    * 将内部的conn 对象包装成动态代理对象
-    * @param leakTask 泄露检测任务
-    * @param now
+    * 初始化该对象时 conn 是jdbc 原生连接 而从pool中获取连接时 通过调用该方法返回一个 代理对象 应该就是重写 close 方法
+    * 应该做了缓存 而不是每次都新建对象
+    * @param leakTask 泄露检测任务   内部包含一个 携带栈轨迹的异常对象 定时任务执行时就是更新 栈轨迹信息
+    * @param now 获取到entry 的时间
     * @return
     */
    Connection createProxyConnection(final ProxyLeakTask leakTask, final long now)

@@ -181,6 +181,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
 
          // 这里好像有点点问题 如果 waiter 从2 连续变成 3 4 之后 成为3的线程 从sharedList中获取到元素 变回2 那么触发 listener.addBagItem(2) 是对的 而另一个就变成
          // listener.addBagItem(4)  这里就跳过了3
+         // 针对 addBagItem 实际上 waiting的数值无关紧要 只是会增加一个添加连接的任务 而是否真的要增加任务还是根据 core max 和 waiting数量来决定的
          listener.addBagItem(waiting);
 
          timeout = timeUnit.toNanos(timeout);
@@ -282,6 +283,7 @@ public class ConcurrentBag<T extends IConcurrentBagEntry> implements AutoCloseab
    public boolean remove(final T bagEntry)
    {
       // 下面条件等同 (! (condition1 || condition2 || condition3))  代表 不是从in_use 或者 reserved 或者 close 状态下触发就返回false
+      // 换句话说 entry 必须先被某个线程持有 not_in_use 就是空闲状态不被持有
       if (!bagEntry.compareAndSet(STATE_IN_USE, STATE_REMOVED) && !bagEntry.compareAndSet(STATE_RESERVED, STATE_REMOVED) && !closed) {
          LOGGER.warn("Attempt to remove an object from the bag that was not borrowed or reserved: {}", bagEntry);
          return false;

@@ -82,12 +82,13 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
     */
    public HikariDataSource(HikariConfig configuration)
    {
+      // 校验参数 同时设置默认值
       configuration.validate();
-      // 将conf 的信息转移到本对象中
+      // 将conf 的信息转移到本对象中 (通过 发射 + set方法)
       configuration.copyStateTo(this);
 
       LOGGER.info("{} - Starting...", configuration.getPoolName());
-      // pool 与 fastPool 都指向一个新的pool 对象  先不看该对象是如何生成的
+      // pool 与 fastPool 都指向一个新的pool 对象
       pool = fastPathPool = new HikariPool(this);
       LOGGER.info("{} - Start completed.", configuration.getPoolName());
 
@@ -100,7 +101,7 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
    // ***********************************************************************
 
    /** {@inheritDoc}
-    *  获取连接对象
+    *  获取连接对象  上层应用就是通过该方法获取正常连接 那么 在 连接池这一层 就是要将请求委托到 pool 中同时 close 也变成将 conn 返还给 pool
     */
    @Override
    public Connection getConnection() throws SQLException
@@ -174,7 +175,10 @@ public class HikariDataSource extends HikariConfig implements DataSource, Closea
       }
    }
 
-   /** {@inheritDoc} */
+   /**
+    * 该对象对应 hikari 封装的 数据源 组合了 pool对象  内部的dataSource 才是jdbc原生的那一层
+    * {@inheritDoc}
+    */
    @Override
    public void setLoginTimeout(int seconds) throws SQLException
    {

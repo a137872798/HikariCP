@@ -47,7 +47,7 @@ class ProxyLeakTaskFactory
    }
 
    /**
-    * 构建 ProxyLeakTask 对象
+    * 将某个 conn 对应的资源泄露检测任务添加到定时器中
     * @param poolEntry
     * @return
     */

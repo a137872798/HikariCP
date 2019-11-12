@@ -117,6 +117,7 @@ abstract class PoolBase
 
    /**
     * 通过 hikariConf 进行初始化
+    * 总结该基类的构造函数通过config 初始化相关属性 并创建了dataSource 对象
     * @param config
     */
    PoolBase(final HikariConfig config)
@@ -163,7 +164,7 @@ abstract class PoolBase
    // ***********************************************************************
 
    /**
-    * 关闭连接对象  打印异常日志
+    * 真正关闭连接对象  打印异常日志
     * @param connection
     * @param closureReason
     */
@@ -390,7 +391,7 @@ abstract class PoolBase
          // 从 配置文件中将 dataSource 相关的属性覆盖到 生成的对象中 如果dataSource 是通过IOC 框架注入进来的 就不需要更改属性了
          PropertyElf.setTargetFromProperties(ds, dataSourceProperties);
       }
-      // 如果存在 jdbcUrl 那么就创建 对应的 dataSource
+      // 如果存在 jdbcUrl 那么就创建 基于驱动的 dataSource （首先尝试加载className 为 driverClassName 的类 失败后尝试使用 jdbcUrl 加载类）
       else if (jdbcUrl != null && ds == null) {
          ds = new DriverDataSource(jdbcUrl, driverClassName, dataSourceProperties, username, password);
       }
@@ -408,9 +409,9 @@ abstract class PoolBase
 
 
       if (ds != null) {
-         // 当 dataSource 成功初始化后 开始设置登录超时时间 (实际上api 的描述是获取连接的超时时间)
+         // 当 dataSource 成功初始化后 设置登录到db 的超时时间
          setLoginTimeout(ds);
-         // 创建网络超时执行器
+         // 创建网络超时执行器 这个线程池是为了什么用的
          createNetworkTimeoutExecutor(ds, dsClassName, jdbcUrl);
       }
 
@@ -419,7 +420,8 @@ abstract class PoolBase
 
    /**
     * Obtain connection from data source.
-    * 从dataSource 中获取一条新连接
+    * 核心流程就是通过dataSource获取一条 连接
+    * 之后将属性设置到connection 后 通过一次与数据库的交互 更改设置
     * @return a Connection connection
     */
    private Connection newConnection() throws Exception
@@ -431,6 +433,7 @@ abstract class PoolBase
          String username = config.getUsername();
          String password = config.getPassword();
 
+         // dataSource 是通过 driverClassName 或者一些其他东西获取的
          connection = (username == null) ? dataSource.getConnection() : dataSource.getConnection(username, password);
 
          // 加工连接
@@ -697,7 +700,7 @@ abstract class PoolBase
 
    /**
     * Set the loginTimeout on the specified DataSource.
-    * 设置获取connection 的超时时间
+    * 设置登录 db 的超时时间
     * @param dataSource the DataSource
     */
    private void setLoginTimeout(final DataSource dataSource)

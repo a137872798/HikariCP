@@ -58,6 +58,10 @@ public class TestConnections
       setSlf4jLogLevel(PoolBase.class, Level.WARN);
    }
 
+   /**
+    * 测试 创建 连接对象
+    * @throws SQLException
+    */
    @Test
    public void testCreate() throws SQLException
    {
@@ -67,7 +71,9 @@ public class TestConnections
       config.setConnectionTestQuery("VALUES 1");
       config.setConnectionInitSql("SELECT 1");
       config.setReadOnly(true);
+      // 连接超时时间
       config.setConnectionTimeout(2500);
+      // 资源泄露检测阈值
       config.setLeakDetectionThreshold(TimeUnit.SECONDS.toMillis(30));
       config.setDataSourceClassName("com.zaxxer.hikari.mocks.StubDataSource");
 

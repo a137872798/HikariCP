@@ -78,13 +78,17 @@ class ProxyLeakTask implements Runnable
       scheduledFuture = executorService.schedule(this, leakDetectionThreshold, TimeUnit.MILLISECONDS);
    }
 
-   /** {@inheritDoc} */
+   /**
+    * 根据指定的 资源泄露检测时间 触发该方法
+    * {@inheritDoc}
+    */
    @Override
    public void run()
    {
       isLeaked = true;
 
       // 异常在生成的地方 会保存 从最初的入口一直到那个方法的 栈轨迹 如果事先生成异常 之后怎么传递 栈轨迹都是不会发生变化的 那么 这里的意义是???
+      // 是不是哪个地方往这个异常对象中设置了什么
       final StackTraceElement[] stackTrace = exception.getStackTrace(); 
       final StackTraceElement[] trace = new StackTraceElement[stackTrace.length - 5];
       // 注意该数组的 顺序是倒序的 最后的方法在最前面 这里去除掉最后面的5个方法
