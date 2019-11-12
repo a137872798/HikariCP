@@ -23,7 +23,6 @@ import com.zaxxer.hikari.util.FastList;
 /**
  * A factory class that produces proxies around instances of the standard
  * JDBC interfaces.
- * 代理工厂 该对象没有实现任何接口 且方法全部抛出异常
  * @author Brett Wooldridge
  */
 @SuppressWarnings("unused")

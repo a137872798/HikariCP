@@ -555,7 +555,7 @@ public class HikariConfig implements HikariConfigMXBean
 
    /**
     * Get the pool suspension behavior (allowed or disallowed).
-    *
+    * 判断在获取不到连接时是否允许悬停当前线程
     * @return the pool suspension behavior
     */
    public boolean isAllowPoolSuspension()
@@ -947,6 +947,7 @@ public class HikariConfig implements HikariConfigMXBean
    public void validate()
    {
       if (poolName == null) {
+         // 如果没有设置 poolName 会随机生成一个
          poolName = generatePoolName();
       }
       else if (isRegisterMbeans && poolName.contains(":")) {
@@ -964,12 +965,13 @@ public class HikariConfig implements HikariConfigMXBean
       driverClassName = getNullIfEmpty(driverClassName);
       jdbcUrl = getNullIfEmpty(jdbcUrl);
 
-      // Check Data Source Options
+      // Check Data Source Options 优先使用dataSource
       if (dataSource != null) {
          if (dataSourceClassName != null) {
             LOGGER.warn("{} - using dataSource and ignoring dataSourceClassName.", poolName);
          }
       }
+      // 当指定了 dataSourceName 时 不能选择 driverClassName
       else if (dataSourceClassName != null) {
          if (driverClassName != null) {
             LOGGER.error("{} - cannot use driverClassName and dataSourceClassName together.", poolName);
@@ -1000,13 +1002,16 @@ public class HikariConfig implements HikariConfigMXBean
       }
    }
 
+   /**
+    * 如果遇到一些参数 过小 则采用默认值
+    */
    private void validateNumerics()
    {
       if (maxLifetime != 0 && maxLifetime < SECONDS.toMillis(30)) {
          LOGGER.warn("{} - maxLifetime is less than 30000ms, setting to default {}ms.", poolName, MAX_LIFETIME);
          maxLifetime = MAX_LIFETIME;
       }
-
+      // 资源检测阈值 不能太高也不能太低
       if (leakDetectionThreshold > 0 && !unitTest) {
          if (leakDetectionThreshold < SECONDS.toMillis(2) || (leakDetectionThreshold > maxLifetime && maxLifetime > 0)) {
             LOGGER.warn("{} - leakDetectionThreshold is less than 2000ms or more than maxLifetime, disabling it.", poolName);
